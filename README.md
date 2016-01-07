@@ -12,3 +12,5 @@ cmake .
 make
 ./desktop-stream
 ```
+
+After running desktop-stream, open http://localhost:8080.
