@@ -1,6 +1,8 @@
-A small program that streams screenshots of the screen to web browsers through WebSocket.
+A small program that streams screenshots to web browsers through WebSocket.
 
-Currently dependent on ImageMagick, Boost, OpenSSL, and the linked repositories.
+Currently, the images are streamed directly without any streaming compression implemented.
+
+Depends on ImageMagick, Boost, OpenSSL, and the linked repositories.
 
 ```sh
 git clone --recursive https://github.com/eidheim/desktop-stream
