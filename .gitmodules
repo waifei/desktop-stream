@@ -1,9 +1,9 @@
 [submodule "Simple-Web-Server"]
 	path = Simple-Web-Server
-	url = https://github.com/eidheim/Simple-Web-Server.git
+	url = https://github.com/eidheim/Simple-Web-Server
 [submodule "Simple-WebSocket-Server"]
 	path = Simple-WebSocket-Server
-	url = https://github.com/eidheim/Simple-WebSocket-Server.git
+	url = https://github.com/eidheim/Simple-WebSocket-Server
 [submodule "tiny-process-library"]
 	path = tiny-process-library
-	url = https://github.com/eidheim/tiny-process-library.git
+	url = https://github.com/eidheim/tiny-process-library
