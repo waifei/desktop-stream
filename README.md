@@ -6,5 +6,7 @@ Currently dependent on ImageMagick, Boost, OpenSSL, and the linked repositories.
 git clone --recursive https://github.com/eidheim/desktop-stream
 cd desktop-stream
 cmake .
+# You might want to change the const variable values before compilation (see main.cpp)
 make
+./desktop-stream
 ```
