@@ -27,7 +27,7 @@ typedef SimpleWeb::Server<SimpleWeb::HTTP> HttpServer;
 const string html="<html>\n"
 "<head>\n"
 "<meta http-equiv='Content-Type' content='text/html; charset=utf-8' />\n"
-"<title>WebSocket Test</title>\n"
+"<title>Desktop Stream</title>\n"
 "</head>\n"
 "<body>\n"
 "<div id='status'></div>\n"
