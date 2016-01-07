@@ -35,7 +35,7 @@ const string html="<html>\n"
 "<script>\n"
 "var ws;\n"
 "window.onload=function(){\n"
-"  ws=new WebSocket('ws://"+ip_address+":8081/image');\n"
+"  ws=new WebSocket('ws://"+ip_address+":8081/desktop');\n"
 "  ws.onmessage=function(evt){\n"
 "    var blob = new Blob([evt.data], {type: 'application/octet-binary'});\n"
 "    console.log(evt.data.size);\n"
@@ -63,7 +63,7 @@ int main() {
     HttpServer http_server(8080, 4);
     WsServer ws_server(8081, 4);
     
-    auto& echo=ws_server.endpoint["^/image/?$"];
+    auto& desktop_endpoint=ws_server.endpoint["^/desktop/?$"];
     
     vector<char> image_buffer;
     mutex image_buffer_mutex;
@@ -116,7 +116,7 @@ int main() {
                 
                 ifs.close();
                 
-                for(auto a_connection: echo.get_connections()) {
+                for(auto a_connection: desktop_endpoint.get_connections()) {
                     connection_retrieving_mutex.lock();
                     //Skip connection if it is not yet inserted into the map
                     auto it=connection_retrieving.find(a_connection.get());
@@ -149,7 +149,7 @@ int main() {
         }
     });
     
-    echo.onopen=[&](shared_ptr<WsServer::Connection> connection) {
+    desktop_endpoint.onopen=[&](shared_ptr<WsServer::Connection> connection) {
         auto send_stream=make_shared<WsServer::SendStream>();
         
         image_buffer_mutex.lock();
@@ -166,7 +166,7 @@ int main() {
         }, 130);
     };
     
-    echo.onclose=[&](shared_ptr<WsServer::Connection> connection, int status, const string& reason) {
+    desktop_endpoint.onclose=[&](shared_ptr<WsServer::Connection> connection, int status, const string& reason) {
         connection_retrieving_mutex.lock();
         auto it=connection_retrieving.find(connection.get());
         if(it!=connection_retrieving.end())
@@ -174,7 +174,7 @@ int main() {
         connection_retrieving_mutex.unlock();
     };
     
-    echo.onerror=[&](shared_ptr<WsServer::Connection> connection, const boost::system::error_code& ec) {
+    desktop_endpoint.onerror=[&](shared_ptr<WsServer::Connection> connection, const boost::system::error_code& ec) {
         connection_retrieving_mutex.lock();
         auto it=connection_retrieving.find(connection.get());
         if(it!=connection_retrieving.end())
