@@ -13,4 +13,4 @@ make
 ./desktop-stream
 ```
 
-After running desktop-stream, open http://localhost:8080.
+After running desktop-stream, open [http://localhost:8080](http://localhost:8080).
