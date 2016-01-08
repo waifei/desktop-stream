@@ -1,6 +1,8 @@
 A small program that streams screenshots to web browsers through WebSocket.
 
 Currently, the images are streamed directly without any streaming compression implemented.
+Screenshots are additionally created and resized using `sh` instead of a library (mainly because of
+missing ports of the screen grab part of frequently used libraries (for instance Gtk+, ImageMagick) to OS X). 
 
 Depends on ImageMagick, Boost, OpenSSL, and the linked repositories.
 
