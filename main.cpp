@@ -6,7 +6,7 @@
 #include <boost/filesystem.hpp>
 
 #include <fstream>
-#include <unordered_map>
+#include <unordered_set>
 #include <set>
 
 using namespace std;
@@ -70,9 +70,10 @@ int main() {
     vector<char> last_image_buffer;
     mutex image_buffer_mutex;
     
-    unordered_map<WsServer::Connection*, bool> connection_retrieving;
-    mutex connection_retrieving_mutex;
+    unordered_set<shared_ptr<WsServer::Connection> > connections_receiving;
+    mutex connections_receiving_mutex;
     
+    //TODO: Consider changing set to unordered_set in Simple-WebSocket-Server
     set<shared_ptr<WsServer::Connection> > connections_skipped;
     mutex connections_skipped_mutex;
     
@@ -133,24 +134,19 @@ int main() {
                 else
                     connections=desktop_endpoint.get_connections();
                 for(auto a_connection: connections) {
-                    connection_retrieving_mutex.lock();
+                    connections_receiving_mutex.lock();
                     bool skip_connection=false;
-                    //Skip connection if it is not yet inserted into the map, or if it is already retrieving data
-                    auto it=connection_retrieving.find(a_connection.get());
-                    if(it==connection_retrieving.end() || connection_retrieving[a_connection.get()])
+                    if(connections_receiving.count(a_connection)>0) {
                         skip_connection=true;
-                    
-                    connections_skipped_mutex.lock();
-                    if(skip_connection && connections_skipped.find(a_connection)==connections_skipped.end())
+                        connections_skipped_mutex.lock();
                         connections_skipped.emplace(a_connection);
-                    connections_skipped_mutex.unlock();
+                        connections_skipped_mutex.unlock();
+                    }
+                    connections_receiving_mutex.unlock();
                     
-                    connection_retrieving_mutex.unlock();
                     if(!skip_connection) {
                         connections_skipped_mutex.lock();
-                        auto it=connections_skipped.find(a_connection);
-                        if(it!=connections_skipped.end())
-                            connections_skipped.erase(it);
+                        connections_skipped.erase(a_connection);
                         connections_skipped_mutex.unlock();
                         
                         auto send_stream=make_shared<WsServer::SendStream>();
@@ -159,13 +155,13 @@ int main() {
                         send_stream->write(image_buffer.data(), image_buffer.size());
                         image_buffer_mutex.unlock();
                         
-                        connection_retrieving_mutex.lock();
-                        connection_retrieving[a_connection.get()]=true;
-                        connection_retrieving_mutex.unlock();
-                        ws_server.send(a_connection, send_stream, [&connection_retrieving, &connection_retrieving_mutex, a_connection](const boost::system::error_code &ec) {
-                            connection_retrieving_mutex.lock();
-                            connection_retrieving[a_connection.get()]=false;
-                            connection_retrieving_mutex.unlock();
+                        connections_receiving_mutex.lock();
+                        connections_receiving.emplace(a_connection);
+                        connections_receiving_mutex.unlock();
+                        ws_server.send(a_connection, send_stream, [&connections_receiving, &connections_receiving_mutex, a_connection](const boost::system::error_code &ec) {
+                            connections_receiving_mutex.lock();
+                            connections_receiving.erase(a_connection);
+                            connections_receiving_mutex.unlock();
                         }, 130);
                     }
                 }
@@ -181,41 +177,33 @@ int main() {
         send_stream->write(image_buffer.data(), image_buffer.size());
         image_buffer_mutex.unlock();
         
-        connection_retrieving_mutex.lock();
-        connection_retrieving[connection.get()]=true;
-        connection_retrieving_mutex.unlock();
-        ws_server.send(connection, send_stream, [&connection_retrieving, &connection_retrieving_mutex, connection](const boost::system::error_code &ec) {
-            connection_retrieving_mutex.lock();
-            connection_retrieving[connection.get()]=false;
-            connection_retrieving_mutex.unlock();
+        connections_receiving_mutex.lock();
+        connections_receiving.emplace(connection);
+        connections_receiving_mutex.unlock();
+        ws_server.send(connection, send_stream, [&connections_receiving, &connections_receiving_mutex, connection](const boost::system::error_code &ec) {
+            connections_receiving_mutex.lock();
+            connections_receiving.erase(connection);
+            connections_receiving_mutex.unlock();
         }, 130);
     };
     
     desktop_endpoint.onclose=[&](shared_ptr<WsServer::Connection> connection, int status, const string& reason) {
-        connection_retrieving_mutex.lock();
-        auto it=connection_retrieving.find(connection.get());
-        if(it!=connection_retrieving.end())
-            connection_retrieving.erase(it);
-        connection_retrieving_mutex.unlock();
+        connections_receiving_mutex.lock();
+        connections_receiving.erase(connection);
+        connections_receiving_mutex.unlock();
         
         connections_skipped_mutex.lock();
-        auto it2=connections_skipped.find(connection);
-        if(it2!=connections_skipped.end())
-            connections_skipped.erase(it2);
+        connections_skipped.erase(connection);
         connections_skipped_mutex.unlock();
     };
     
     desktop_endpoint.onerror=[&](shared_ptr<WsServer::Connection> connection, const boost::system::error_code& ec) {
-        connection_retrieving_mutex.lock();
-        auto it=connection_retrieving.find(connection.get());
-        if(it!=connection_retrieving.end())
-            connection_retrieving.erase(it);
-        connection_retrieving_mutex.unlock();
+        connections_receiving_mutex.lock();
+        connections_receiving.erase(connection);
+        connections_receiving_mutex.unlock();
         
         connections_skipped_mutex.lock();
-        auto it2=connections_skipped.find(connection);
-        if(it2!=connections_skipped.end())
-            connections_skipped.erase(it2);
+        connections_skipped.erase(connection);
         connections_skipped_mutex.unlock();
         
         cerr << "Error: " << ec << ", error message: " << ec.message() << endl;
