@@ -7,6 +7,7 @@
 
 #include <fstream>
 #include <unordered_map>
+#include <set>
 
 using namespace std;
 
@@ -15,9 +16,9 @@ const boost::filesystem::path screenshot_directory(".");
 const string screenshot_filename="screenshot_resized.png";
 //ImageMagick commands:
 #if defined(__APPLE__)
-const string screenshot_command("screencapture -x screenshot.png && convert screenshot.png -resize 50% "+screenshot_filename);
+const string screenshot_command("screencapture -x screenshot.png && convert screenshot.png -strip -resize 75% "+screenshot_filename);
 #else
-const string screenshot_command("import -window root -resize 50% "+screenshot_filename);
+const string screenshot_command("import -window root -strip -resize 75% "+screenshot_filename);
 #endif
 const size_t delay=100; //delay in milliseconds
 
@@ -66,10 +67,14 @@ int main() {
     auto& desktop_endpoint=ws_server.endpoint["^/desktop/?$"];
     
     vector<char> image_buffer;
+    vector<char> last_image_buffer;
     mutex image_buffer_mutex;
     
     unordered_map<WsServer::Connection*, bool> connection_retrieving;
     mutex connection_retrieving_mutex;
+    
+    set<shared_ptr<WsServer::Connection> > connections_skipped;
+    mutex connections_skipped_mutex;
     
     if(!boost::filesystem::exists(screenshot_directory)) {
         cerr << screenshot_directory << " does not exist, please create it or change the screenshot directory path" << endl;
@@ -112,22 +117,42 @@ int main() {
                 image_buffer_mutex.lock();
                 image_buffer.resize(length);
                 ifs.read(&image_buffer[0], length);
+                bool equal_buffer=(image_buffer==last_image_buffer);
+                if(!equal_buffer)
+                    last_image_buffer=image_buffer;
                 image_buffer_mutex.unlock();
                 
                 ifs.close();
                 
-                for(auto a_connection: desktop_endpoint.get_connections()) {
+                set<shared_ptr<WsServer::Connection> > connections;
+                if(equal_buffer) {
+                    connections_skipped_mutex.lock();
+                    connections=connections_skipped;
+                    connections_skipped_mutex.unlock();
+                }
+                else
+                    connections=desktop_endpoint.get_connections();
+                for(auto a_connection: connections) {
                     connection_retrieving_mutex.lock();
-                    //Skip connection if it is not yet inserted into the map
+                    bool skip_connection=false;
+                    //Skip connection if it is not yet inserted into the map, or if it is already retrieving data
                     auto it=connection_retrieving.find(a_connection.get());
-                    if(it==connection_retrieving.end()) {
-                        connection_retrieving_mutex.unlock();
-                        continue;
-                    }
-                    //skip connection if it is already retrieving data
-                    auto skip_connection=connection_retrieving[a_connection.get()];
+                    if(it==connection_retrieving.end() || connection_retrieving[a_connection.get()])
+                        skip_connection=true;
+                    
+                    connections_skipped_mutex.lock();
+                    if(skip_connection && connections_skipped.find(a_connection)==connections_skipped.end())
+                        connections_skipped.emplace(a_connection);
+                    connections_skipped_mutex.unlock();
+                    
                     connection_retrieving_mutex.unlock();
                     if(!skip_connection) {
+                        connections_skipped_mutex.lock();
+                        auto it=connections_skipped.find(a_connection);
+                        if(it!=connections_skipped.end())
+                            connections_skipped.erase(it);
+                        connections_skipped_mutex.unlock();
+                        
                         auto send_stream=make_shared<WsServer::SendStream>();
                         
                         image_buffer_mutex.lock();
@@ -172,6 +197,12 @@ int main() {
         if(it!=connection_retrieving.end())
             connection_retrieving.erase(it);
         connection_retrieving_mutex.unlock();
+        
+        connections_skipped_mutex.lock();
+        auto it2=connections_skipped.find(connection);
+        if(it2!=connections_skipped.end())
+            connections_skipped.erase(it2);
+        connections_skipped_mutex.unlock();
     };
     
     desktop_endpoint.onerror=[&](shared_ptr<WsServer::Connection> connection, const boost::system::error_code& ec) {
@@ -181,8 +212,13 @@ int main() {
             connection_retrieving.erase(it);
         connection_retrieving_mutex.unlock();
         
-        cout << "Server: Error in connection " << (size_t)connection.get() << ". " << 
-                "Error: " << ec << ", error message: " << ec.message() << endl;
+        connections_skipped_mutex.lock();
+        auto it2=connections_skipped.find(connection);
+        if(it2!=connections_skipped.end())
+            connections_skipped.erase(it2);
+        connections_skipped_mutex.unlock();
+        
+        cerr << "Error: " << ec << ", error message: " << ec.message() << endl;
     };
     
     http_server.default_resource["GET"]=[](HttpServer::Response& response, shared_ptr<HttpServer::Request> request) {
