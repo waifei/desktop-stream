@@ -18,7 +18,7 @@ const string screenshot_filename="screenshot_resized.png";
 #if defined(__APPLE__)
 const string screenshot_command("screencapture -x screenshot.png && convert screenshot.png -strip -resize 75% "+screenshot_filename);
 #else
-const string screenshot_command("import -window root -strip -resize 75% "+screenshot_filename);
+const string screenshot_command("import -window root -silent -strip -resize 75% "+screenshot_filename);
 #endif
 const size_t delay=100; //delay in milliseconds
 
